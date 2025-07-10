@@ -1,0 +1,12 @@
+# config.yaml
+model:
+  name: "efficientnet_b0"
+
+paths:
+  database: "data/feature_database.npy"
+  coordinates: "data/coordinates.json"
+  avatar_library: "data/avatars"
+  output_dir: "output"
+
+recognition:
+  similarity_threshold: 0.6
