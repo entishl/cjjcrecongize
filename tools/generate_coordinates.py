@@ -1,75 +1,50 @@
 import json
 import os
-import shutil
-import argparse
 
-def generate_coordinates(x1, y1, n):
+def generate_coordinates():
     """
-    Generates a list of coordinates based on the initial point and side length.
+    Generates coordinates for two 5x5 grids and saves them to a JSON file.
     """
     coordinates = []
+    # Construct the absolute path for the output file
+    # The script is in tools/, data/ is in the parent directory
+    output_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'coordinates.json')
+
+    # Grid 1 (P1)
+    # Initial rectangle: (36, 359, 118, 441)
+    p1_x1_start, p1_y1_start = 36, 359
+    width = 118 - 36
+    height = 441 - 359
     h_step = 141
     v_step = 286
-    p2_offset = 1102
 
-    # Generate P1 coordinates
-    for i in range(5):
-        for j in range(5):
-            name = f"P1_T{i+1}_{j+1}"
-            rect_x1 = x1 + j * h_step
-            rect_y1 = y1 + i * v_step
-            rect_x2 = rect_x1 + n
-            rect_y2 = rect_y1 + n
-            rect = [rect_x1, rect_y1, rect_x2, rect_y2]
-            coordinates.append({"name": name, "rect": rect})
+    for row in range(1, 6):
+        for col in range(1, 6):
+            name = f"P1_T{row}_{col}"
+            x1 = p1_x1_start + (col - 1) * h_step
+            y1 = p1_y1_start + (row - 1) * v_step
+            x2 = x1 + width
+            y2 = y1 + height
+            coordinates.append({"name": name, "rect": [x1, y1, x2, y2]})
 
-    # Generate P2 coordinates
-    x1_p2 = x1 + p2_offset
-    for i in range(5):
-        for j in range(5):
-            name = f"P2_T{i+1}_{j+1}"
-            rect_x1 = x1_p2 + j * h_step
-            rect_y1 = y1 + i * v_step
-            rect_x2 = rect_x1 + n
-            rect_y2 = rect_y1 + n
-            rect = [rect_x1, rect_y1, rect_x2, rect_y2]
-            coordinates.append({"name": name, "rect": rect})
-            
-    return coordinates
+    # Grid 2 (P2)
+    # Initial rectangle: (1138, 359, 1220, 441)
+    p2_x1_start, p2_y1_start = 1138, 359
 
-def main():
-    """
-    Main function to generate and save coordinates.
-    """
-    parser = argparse.ArgumentParser(description="Generate coordinate files.")
-    parser.add_argument("x1", type=int, help="Initial x coordinate")
-    parser.add_argument("y1", type=int, help="Initial y coordinate")
-    parser.add_argument("n", type=int, help="Side length of the rectangle")
-    args = parser.parse_args()
+    for row in range(1, 6):
+        for col in range(1, 6):
+            name = f"P2_T{row}_{col}"
+            x1 = p2_x1_start + (col - 1) * h_step
+            y1 = p2_y1_start + (row - 1) * v_step
+            x2 = x1 + width
+            y2 = y1 + height
+            coordinates.append({"name": name, "rect": [x1, y1, x2, y2]})
 
-    x1 = args.x1
-    y1 = args.y1
-    n = args.n
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(coordinates, f, indent=4, ensure_ascii=False)
 
-    # Define file paths
-    # The script is in tools/, so we go up one level to the project root.
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    json_path = os.path.join(project_root, "data", "coordinates.json")
-    backup_path = json_path + ".bak"
-
-    # Backup the existing file
-    if os.path.exists(json_path):
-        shutil.copyfile(json_path, backup_path)
-        print(f"Backup of {json_path} created at {backup_path}")
-
-    # Generate new coordinates
-    new_coords = generate_coordinates(x1, y1, n)
-
-    # Write the new coordinates to the file
-    with open(json_path, "w") as f:
-        json.dump(new_coords, f, indent=2)
-    
-    print(f"Successfully generated and saved new coordinates to {json_path}")
+    print(f"Successfully generated coordinates file at: {output_path}")
 
 if __name__ == "__main__":
-    main()
+    generate_coordinates()
