@@ -1,10 +1,27 @@
+# Project specific folders
 sprite/
 needs_review/
 archived/
-.venv/
-assets/
-data/avatars/
 tobefinished/
 moreavatars/
-data/avatars/
 output/
+input/
+assets/
+# Python runtime
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# IDE configuration
+.vscode/
+.idea/
+
+# Data files
+data/avatars/
+data/feature_database.npy
+data/*.bak
