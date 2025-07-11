@@ -4,9 +4,9 @@ needs_review/
 archived/
 tobefinished/
 moreavatars/
-output/
 input/
 assets/
+output/
 # Python runtime
 .venv/
 __pycache__/
