@@ -9,10 +9,8 @@ assets/
 output/
 # Python runtime
 .venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+
+
 
 # Environment variables
 .env
@@ -23,5 +21,4 @@ __pycache__/
 
 # Data files
 data/avatars/
-data/feature_database.npy
 data/*.bak

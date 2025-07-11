@@ -10,3 +10,8 @@ paths:
 
 recognition:
   similarity_threshold: 0.85
+
+preprocessing:
+  target_width: 1812
+  target_height: 1759
+  tolerance: 0.01

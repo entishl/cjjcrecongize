@@ -109,7 +109,7 @@ def main():
             print(f"\n--- 正在处理: {os.path.basename(image_path)} ---")
             try:
                 # 3.1. 执行识别
-                results, cropped_avatars = recognizer.recognize(image_path)
+                results, cropped_avatars, processed_image = recognizer.recognize(image_path)
 
                 # 3.2. 打印结果
                 print("识别结果:")
@@ -123,7 +123,8 @@ def main():
                 # 3.4. 可选：可视化
                 if args.visualize:
                     print("正在生成可视化结果...")
-                    output_image = visualize_results(image_path, results, recognizer.crop_regions)
+                    # 使用处理后的图像进行可视化
+                    output_image = visualize_results(processed_image, results, recognizer.crop_regions)
                     
                     # 保存结果
                     output_dir = config.paths.output_dir

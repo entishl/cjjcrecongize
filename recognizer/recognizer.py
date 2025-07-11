@@ -5,7 +5,7 @@ import pandas as pd
 from typing import List, Dict, Any, Tuple
 from sklearn.metrics.pairwise import cosine_similarity
 
-from .utils import Config, load_coordinates
+from .utils import Config, load_coordinates, preprocess_image
 from .extractor import FeatureExtractor
 
 class AvatarRecognizer:
@@ -72,7 +72,7 @@ class AvatarRecognizer:
             cropped_images.append(cropped_img)
         return cropped_images
 
-    def recognize(self, image_path: str) -> Tuple[List[Dict[str, Any]], List[np.ndarray]]:
+    def recognize(self, image_path: str) -> Tuple[List[Dict[str, Any]], List[np.ndarray], np.ndarray]:
         """
         对单张游戏截图执行完整的识别流程。
 
@@ -80,16 +80,18 @@ class AvatarRecognizer:
             image_path (str): 待识别的截图文件路径。
 
         Returns:
-            Tuple[List[Dict[str, Any]], List[np.ndarray]]:
+            Tuple[List[Dict[str, Any]], List[np.ndarray], np.ndarray]:
                 - results (List[Dict[str, Any]]): 包含每个位置识别结果的列表。
                 - cropped_avatars (List[np.ndarray]): 裁剪出的头像图像列表。
+                - processed_image (np.ndarray): 经过预处理（可能缩放）的BGR图像。
         """
         # 1. 读取和预处理输入图像
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"输入图像 '{image_path}' 不存在。")
         
-        image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_COLOR)
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # 使用新的预处理函数
+        image_bgr = preprocess_image(image_path, self.config.preprocessing)
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
         # 2. 裁剪所有头像
         cropped_avatars = self._crop_avatars(image_rgb)
@@ -134,4 +136,4 @@ class AvatarRecognizer:
                 "all_scores": sorted_scores
             })
             
-        return results, cropped_avatars
+        return results, cropped_avatars, image_bgr
