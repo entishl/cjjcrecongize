@@ -3,6 +3,7 @@ import argparse
 import pprint
 import cv2
 import numpy as np
+import pandas as pd
 from typing import List, Dict, Any
 
 from recognizer import load_config, AvatarRecognizer, visualize_results, Config
@@ -63,6 +64,100 @@ def save_cropped_results(
     print(f"裁剪结果已保存至: {run_dir}")
 
 
+def save_failed_crops(
+    results: List[Dict[str, Any]],
+    cropped_avatars: List[np.ndarray],
+    output_dir: str,
+    original_filename: str
+):
+    """
+    仅保存识别失败的头像切片。
+
+    Args:
+        results (List[Dict[str, Any]]): 识别结果列表。
+        cropped_avatars (List[np.ndarray]): 裁剪的头像图像列表。
+        output_dir (str): 保存结果的根目录。
+        original_filename (str): 原始输入图像的文件名。
+    """
+    failed_crops_found = False
+    base_name, _ = os.path.splitext(original_filename)
+    run_dir = os.path.join(output_dir, f"{base_name}_failed_crops")
+
+    for i, result in enumerate(results):
+        if result['character'] == "未知":
+            if not failed_crops_found:
+                print("检测到识别失败的切片，正在保存...")
+                os.makedirs(run_dir, exist_ok=True)
+                failed_crops_found = True
+            
+            position_name = result['position']
+            
+            # 保存裁剪的图像
+            image_path = os.path.join(run_dir, f"{position_name}.png")
+            img_bgr = cv2.cvtColor(cropped_avatars[i], cv2.COLOR_RGB2BGR)
+            is_success, buffer = cv2.imencode(".png", img_bgr)
+            if is_success:
+                with open(image_path, 'wb') as f:
+                    f.write(buffer)
+
+    if failed_crops_found:
+        print(f"识别失败的切片已保存至: {run_dir}")
+
+
+def save_results_to_csv(
+    results: List[Dict[str, Any]],
+    win_loss_results: List[str],
+    output_dir: str,
+    original_filename: str
+):
+    """
+    将识别结果和 W/L 判断聚合成一个 CSV 文件。
+
+    Args:
+        results (List[Dict[str, Any]]): 包含50个区域的识别结果列表。
+        win_loss_results (List[str]): 包含5个W/L判断结果的列表。
+        output_dir (str): 保存 CSV 文件的目录。
+        original_filename (str): 原始输入图像的文件名。
+    """
+    print("正在生成 CSV 报告...")
+    
+    # 1. 将结果列表转换为按位置名称快速查找的字典
+    results_map = {res['position']: res['character'] for res in results}
+    
+    # 2. 定义 CSV 的列名和行数
+    columns = ["A1", "A2", "A3", "A4", "A5", "WOL", "D1", "D2", "D3", "D4", "D5"]
+    num_rows = 5
+    
+    # 3. 准备用于填充 DataFrame 的数据
+    csv_data = []
+    for i in range(num_rows):
+        team_num = i + 1
+        row = {
+            "A1": results_map.get(f"P1_T{team_num}_1", "N/A"),
+            "A2": results_map.get(f"P1_T{team_num}_2", "N/A"),
+            "A3": results_map.get(f"P1_T{team_num}_3", "N/A"),
+            "A4": results_map.get(f"P1_T{team_num}_4", "N/A"),
+            "A5": results_map.get(f"P1_T{team_num}_5", "N/A"),
+            "WOL": win_loss_results[i] if i < len(win_loss_results) else "N/A",
+            "D1": results_map.get(f"P2_T{team_num}_1", "N/A"),
+            "D2": results_map.get(f"P2_T{team_num}_2", "N/A"),
+            "D3": results_map.get(f"P2_T{team_num}_3", "N/A"),
+            "D4": results_map.get(f"P2_T{team_num}_4", "N/A"),
+            "D5": results_map.get(f"P2_T{team_num}_5", "N/A"),
+        }
+        csv_data.append(row)
+        
+    # 4. 创建 DataFrame 并保存为 CSV
+    df = pd.DataFrame(csv_data, columns=columns)
+    
+    base_name, _ = os.path.splitext(original_filename)
+    csv_path = os.path.join(output_dir, f"{base_name}_results.csv")
+    
+    df.to_csv(csv_path, sep=',', index=False, encoding='utf-8-sig')
+    
+    print(f"CSV 报告已保存至: {csv_path}")
+
+
 def main():
     """
     主函数，程序的入口点。
@@ -72,8 +167,16 @@ def main():
                         help="待识别的游戏截图文件或目录路径。")
     parser.add_argument("-v", "--visualize", action="store_true",
                         help="是否显示并保存可视化结果。")
-    parser.add_argument("--save-crops", action="store_true",
-                        help="是否将被识别的头像切片保存到目录中。")
+    
+    # 创建互斥参数组，确保 --save-crops 和 --save-failed-crops 不会同时使用
+    save_group = parser.add_mutually_exclusive_group()
+    save_group.add_argument("--save-crops", action="store_true",
+                            help="是否将被识别的头像切片保存到目录中。")
+    save_group.add_argument("--save-failed-crops", action="store_true",
+                            help="仅保存识别失败的头像切片。")
+
+    parser.add_argument("--no-csv", action="store_true",
+                        help="不生成最终的 CSV 结果文件。")
     args = parser.parse_args()
 
     # 1. 确定要处理的文件列表
@@ -109,18 +212,28 @@ def main():
             print(f"\n--- 正在处理: {os.path.basename(image_path)} ---")
             try:
                 # 3.1. 执行识别
-                results, cropped_avatars, processed_image = recognizer.recognize(image_path)
+                results, win_loss_results, cropped_avatars, processed_image = recognizer.recognize(image_path)
 
                 # 3.2. 打印结果
                 print("识别结果:")
                 pprint.pprint(results)
+                print("\nW/L 判断结果:")
+                print(win_loss_results)
 
-                # 3.3. 可选：保存切片
+                # 3.3. 保存结果到 CSV
+                if not args.no_csv:
+                    original_filename = os.path.basename(image_path)
+                    save_results_to_csv(results, win_loss_results, config.paths.output_dir, original_filename)
+
+                # 3.4. 可选：保存切片
                 if args.save_crops:
                     original_filename = os.path.basename(image_path)
                     save_cropped_results(results, cropped_avatars, config.paths.output_dir, original_filename)
+                elif args.save_failed_crops:
+                    original_filename = os.path.basename(image_path)
+                    save_failed_crops(results, cropped_avatars, config.paths.output_dir, original_filename)
 
-                # 3.4. 可选：可视化
+                # 3.5. 可选：可视化
                 if args.visualize:
                     print("正在生成可视化结果...")
                     # 使用处理后的图像进行可视化

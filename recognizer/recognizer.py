@@ -8,6 +8,34 @@ from sklearn.metrics.pairwise import cosine_similarity
 from .utils import Config, load_coordinates, preprocess_image
 from .extractor import FeatureExtractor
 
+def check_win_loss_colors(image_rgb: np.ndarray, coordinates: List[Tuple[int, int]]) -> List[str]:
+    """
+    检查指定坐标点的颜色，以确定是“赢” (W) 还是“输” (L)。
+
+    Args:
+        image_rgb (np.ndarray): RGB 格式的输入图像。
+        coordinates (List[Tuple[int, int]]): 要检查的 (x, y) 坐标列表。
+
+    Returns:
+        List[str]: 每个坐标点的结果列表 ("W", "L", 或 "ERROR")。
+    """
+    results = []
+    height, width, _ = image_rgb.shape
+    for x, y in coordinates:
+        if 0 <= y < height and 0 <= x < width:
+            # 注意：OpenCV 读取的图像坐标是 (y, x)
+            r, g, b = image_rgb[y, x]
+            if r > b and r > 100:
+                results.append("L")
+            elif b > r and b > 100:
+                results.append("W")
+            else:
+                results.append("ERROR")
+        else:
+            results.append("ERROR") # 坐标越界
+    return results
+
+
 class AvatarRecognizer:
     """
     核心识别器类，负责执行完整的识别流程。
@@ -72,7 +100,7 @@ class AvatarRecognizer:
             cropped_images.append(cropped_img)
         return cropped_images
 
-    def recognize(self, image_path: str) -> Tuple[List[Dict[str, Any]], List[np.ndarray], np.ndarray]:
+    def recognize(self, image_path: str) -> Tuple[List[Dict[str, Any]], List[str], List[np.ndarray], np.ndarray]:
         """
         对单张游戏截图执行完整的识别流程。
 
@@ -80,8 +108,9 @@ class AvatarRecognizer:
             image_path (str): 待识别的截图文件路径。
 
         Returns:
-            Tuple[List[Dict[str, Any]], List[np.ndarray], np.ndarray]:
+            Tuple[List[Dict[str, Any]], List[str], List[np.ndarray], np.ndarray]:
                 - results (List[Dict[str, Any]]): 包含每个位置识别结果的列表。
+                - win_loss_results (List[str]): 包含5个W/L判断结果的列表。
                 - cropped_avatars (List[np.ndarray]): 裁剪出的头像图像列表。
                 - processed_image (np.ndarray): 经过预处理（可能缩放）的BGR图像。
         """
@@ -93,17 +122,23 @@ class AvatarRecognizer:
         image_bgr = preprocess_image(image_path, self.config.preprocessing)
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-        # 2. 裁剪所有头像
+        # 2. 检查 W/L 颜色
+        win_loss_coords = [
+            (836, 825), (836, 891), (836, 957), (836, 1023), (836, 1089)
+        ]
+        win_loss_results = check_win_loss_colors(image_rgb, win_loss_coords)
+
+        # 3. 裁剪所有头像
         cropped_avatars = self._crop_avatars(image_rgb)
 
-        # 3. 批量提取查询特征
+        # 4. 批量提取查询特征
         query_features = self.feature_extractor.extract(cropped_avatars)
 
-        # 4. 计算相似度矩阵
+        # 5. 计算相似度矩阵
         # 结果矩阵的维度: (N_queries, N_total_db_features)
         similarity_matrix = cosine_similarity(query_features, self.flat_feature_database)
 
-        # 5. 为每个查询找到最佳匹配 (最大相似度策略)
+        # 6. 为每个查询找到最佳匹配 (最大相似度策略)
         # 使用 pandas 进行高效的分组和最大值查找
         df = pd.DataFrame(similarity_matrix, columns=self.db_character_map)
         
@@ -115,7 +150,7 @@ class AvatarRecognizer:
         best_match_scores = max_similarity_per_char.max(axis=1).values
         best_match_chars = max_similarity_per_char.idxmax(axis=1).values
 
-        # 6. 格式化结果
+        # 7. 格式化结果
         results = []
         threshold = self.config.recognition.similarity_threshold
         for i, region in enumerate(self.crop_regions):
@@ -136,4 +171,4 @@ class AvatarRecognizer:
                 "all_scores": sorted_scores
             })
             
-        return results, cropped_avatars, image_bgr
+        return results, win_loss_results, cropped_avatars, image_bgr
